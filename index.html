@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoneyTracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>MoneyTracker</h1>
+            <div class="header-actions">
+                <button id="importBtn" class="btn btn-primary">Import CSV</button>
+                <button id="exportBtn" class="btn btn-secondary">Export Data</button>
+                <button id="categoryManagerBtn" class="btn btn-secondary">Manage Categories</button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-section">
+                    <h2>Categories</h2>
+                    <div id="categoryList" class="category-list">
+                        <div class="category-group">
+                            <h3>His</h3>
+                            <div class="category-items" data-group="His"></div>
+                        </div>
+                        <div class="category-group">
+                            <h3>Hers</h3>
+                            <div class="category-items" data-group="Hers"></div>
+                        </div>
+                        <div class="category-group">
+                            <h3>Pets</h3>
+                            <div class="category-items" data-group="Pets"></div>
+                        </div>
+                        <div class="category-group">
+                            <h3>Shared</h3>
+                            <div class="category-items" data-group="Shared"></div>
+                        </div>
+                        <div class="category-group">
+                            <h3>Transfers</h3>
+                            <div class="category-items" data-group="Transfers"></div>
+                        </div>
+                        <div class="category-group">
+                            <h3>Uncategorized</h3>
+                            <div class="category-items" data-group="Uncategorized">
+                                <div class="category-item">
+                                    <span class="category-name">No Category</span>
+                                    <span class="category-count" id="uncategorizedCount">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h2>Actions</h2>
+                    <button id="applyRulesBtn" class="btn btn-action">Apply Auto-Rules</button>
+                    <button id="clearSelectionBtn" class="btn btn-action">Clear Selection</button>
+                </div>
+            </aside>
+
+            <!-- Transaction List -->
+            <main class="transaction-area">
+                <div class="transaction-controls">
+                    <div class="bulk-actions">
+                        <button id="bulkCategorizeBtn" class="btn btn-action" disabled>Categorize Selected</button>
+                        <span id="selectionCount" class="selection-count">0 selected</span>
+                    </div>
+                    <div class="filters">
+                        <input type="text" id="searchInput" placeholder="Search transactions..." class="search-input">
+                    </div>
+                </div>
+
+                <div class="transaction-table-container">
+                    <table class="transaction-table">
+                        <thead>
+                            <tr>
+                                <th class="col-checkbox"><input type="checkbox" id="selectAllCheckbox"></th>
+                                <th class="col-date">Date</th>
+                                <th class="col-description">Description</th>
+                                <th class="col-amount">Amount</th>
+                                <th class="col-category">Category</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionTableBody">
+                            <tr class="empty-state">
+                                <td colspan="6">
+                                    <div class="empty-message">
+                                        <p>No transactions yet</p>
+                                        <p>Click "Import CSV" to get started</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Import CSV</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="importStep1" class="import-step">
+                    <input type="file" id="csvFileInput" accept=".csv" class="file-input">
+                    <label for="csvFileInput" class="file-label">
+                        <span>Choose CSV File</span>
+                    </label>
+                </div>
+                <div id="importStep2" class="import-step hidden">
+                    <h3>Preview</h3>
+                    <p id="importInfo"></p>
+                    <div class="preview-container">
+                        <table class="preview-table">
+                            <thead id="previewTableHead"></thead>
+                            <tbody id="previewTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="modal-actions">
+                        <button id="confirmImportBtn" class="btn btn-primary">Import Transactions</button>
+                        <button id="cancelImportBtn" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Manager Modal -->
+    <div id="categoryManagerModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Manage Categories</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="category-manager">
+                    <div class="add-category-form">
+                        <h3>Add Category</h3>
+                        <select id="categoryGroupSelect" class="form-select">
+                            <option value="His">His</option>
+                            <option value="Hers">Hers</option>
+                            <option value="Pets">Pets</option>
+                            <option value="Shared">Shared</option>
+                            <option value="Transfers">Transfers</option>
+                        </select>
+                        <input type="text" id="categoryNameInput" placeholder="Category name" class="form-input">
+                        <input type="color" id="categoryColorInput" value="#4a9eff" class="form-input-color">
+                        <button id="addCategoryBtn" class="btn btn-primary">Add</button>
+                    </div>
+                    <div class="category-list-manager">
+                        <h3>Existing Categories</h3>
+                        <div id="categoryManagerList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Categorize Modal -->
+    <div id="bulkCategorizeModal" class="modal hidden">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Categorize Selected Transactions</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="bulkCategorizeInfo"></p>
+                <select id="bulkCategorySelect" class="form-select">
+                    <option value="">Select a category...</option>
+                </select>
+                <div class="modal-actions">
+                    <button id="confirmBulkCategorizeBtn" class="btn btn-primary">Apply</button>
+                    <button id="cancelBulkCategorizeBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Rule Modal -->
+    <div id="createRuleModal" class="modal hidden">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Create Auto-Categorization Rule</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="rulePatternInput">Pattern to match:</label>
+                    <input type="text" id="rulePatternInput" class="form-input" placeholder="e.g., APPLE.COM">
+                    <small>This will match any transaction containing this text</small>
+                </div>
+                <div class="form-group">
+                    <label for="ruleCategorySelect">Category:</label>
+                    <select id="ruleCategorySelect" class="form-select"></select>
+                </div>
+                <div class="modal-actions">
+                    <button id="confirmCreateRuleBtn" class="btn btn-primary">Create Rule</button>
+                    <button id="cancelCreateRuleBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Split Transaction Modal -->
+    <div id="splitTransactionModal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Split Transaction</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="split-transaction-info">
+                    <p id="splitTransactionDesc"></p>
+                    <p id="splitTransactionAmount"></p>
+                </div>
+
+                <!-- Template Selection -->
+                <div class="split-templates-section">
+                    <h3>Quick Templates</h3>
+                    <div id="templateButtons" class="template-buttons"></div>
+                </div>
+
+                <!-- Manual Split -->
+                <div class="split-manual-section">
+                    <h3>Split Details</h3>
+                    <div id="splitsList" class="splits-list"></div>
+                    <button id="addSplitBtn" class="btn btn-secondary">+ Add Category</button>
+                    <div class="split-total">
+                        <span>Total:</span>
+                        <span id="splitPercentageTotal">0%</span>
+                        <span id="splitAmountTotal">$0.00</span>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="saveSplitAsTemplateBtn" class="btn btn-secondary">Save as Template</button>
+                    <button id="confirmSplitBtn" class="btn btn-primary">Apply Split</button>
+                    <button id="cancelSplitBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Split Template Modal -->
+    <div id="saveSplitTemplateModal" class="modal hidden">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Save as Template</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="templateNameInput">Template Name:</label>
+                    <input type="text" id="templateNameInput" class="form-input" placeholder="e.g., Amazon - Typical">
+                </div>
+                <div class="modal-actions">
+                    <button id="confirmSaveTemplateBtn" class="btn btn-primary">Save</button>
+                    <button id="cancelSaveTemplateBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input for import -->
+    <input type="file" id="importDataFileInput" accept=".json" style="display: none;">
+
+    <!-- Scripts -->
+    <script src="db.js"></script>
+    <script src="csv-parser.js"></script>
+    <script src="categories.js"></script>
+    <script src="rules.js"></script>
+    <script src="templates.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
