@@ -9,6 +9,7 @@ class MoneyTrackerApp {
         this.rulesEngine = null;
         this.templateManager = null;
         this.transactions = [];
+        this.displayedTransactions = []; // Currently visible transactions
         this.selectedTransactions = new Set();
         this.categoryCounts = {};
         this.previewTransactions = [];
@@ -72,6 +73,12 @@ class MoneyTrackerApp {
         document.getElementById('bulkCategorizeBtn').addEventListener('click', () => this.openBulkCategorize());
         document.getElementById('confirmBulkCategorizeBtn').addEventListener('click', () => this.confirmBulkCategorize());
         document.getElementById('cancelBulkCategorizeBtn').addEventListener('click', () => this.closeBulkCategorize());
+
+        // Bulk split
+        document.getElementById('bulkSplitBtn').addEventListener('click', () => this.openBulkSplit());
+        document.getElementById('addBulkSplitBtn').addEventListener('click', () => this.addBulkSplitRow());
+        document.getElementById('confirmBulkSplitBtn').addEventListener('click', () => this.confirmBulkSplit());
+        document.getElementById('cancelBulkSplitBtn').addEventListener('click', () => this.closeBulkSplit());
 
         // Split transaction
         document.getElementById('addSplitBtn').addEventListener('click', () => this.addSplitRow());
@@ -172,6 +179,9 @@ class MoneyTrackerApp {
     renderTransactions(filteredTransactions = null) {
         const tbody = document.getElementById('transactionTableBody');
         const transactionsToRender = filteredTransactions || this.transactions;
+
+        // Track what's currently displayed
+        this.displayedTransactions = transactionsToRender;
 
         if (transactionsToRender.length === 0) {
             tbody.innerHTML = `
@@ -301,6 +311,12 @@ class MoneyTrackerApp {
         const count = this.selectedTransactions.size;
         document.getElementById('selectionCount').textContent = `${count} selected`;
         document.getElementById('bulkCategorizeBtn').disabled = count === 0;
+        document.getElementById('bulkSplitBtn').disabled = count === 0;
+
+        // Update "select all" checkbox state
+        const allDisplayedSelected = this.displayedTransactions.length > 0 &&
+            this.displayedTransactions.every(t => this.selectedTransactions.has(t.id));
+        document.getElementById('selectAllCheckbox').checked = allDisplayedSelected;
 
         // Update row styling
         document.querySelectorAll('#transactionTableBody tr').forEach(row => {
@@ -314,17 +330,19 @@ class MoneyTrackerApp {
     }
 
     /**
-     * Select all transactions
+     * Select all transactions (only currently displayed ones)
      */
     selectAll(checked) {
         if (checked) {
-            this.transactions.forEach(t => this.selectedTransactions.add(t.id));
+            // Only select displayed transactions
+            this.displayedTransactions.forEach(t => this.selectedTransactions.add(t.id));
         } else {
-            this.selectedTransactions.clear();
+            // Only deselect displayed transactions
+            this.displayedTransactions.forEach(t => this.selectedTransactions.delete(t.id));
         }
 
-        this.renderTransactions();
         this.updateSelectionUI();
+        this.renderTransactions(this.displayedTransactions);
     }
 
     /**
@@ -332,9 +350,9 @@ class MoneyTrackerApp {
      */
     clearSelection() {
         this.selectedTransactions.clear();
-        document.getElementById('selectAllCheckbox').checked = false;
         this.updateSelectionUI();
-        this.renderTransactions();
+        // Re-render with current displayed transactions to maintain filter
+        this.renderTransactions(this.displayedTransactions);
     }
 
     /**
@@ -993,6 +1011,226 @@ class MoneyTrackerApp {
             alert('Template saved successfully!');
         } catch (error) {
             alert('Error saving template: ' + error.message);
+            console.error(error);
+        }
+    }
+
+    /**
+     * Open bulk split modal
+     */
+    openBulkSplit() {
+        if (this.selectedTransactions.size === 0) return;
+
+        // Reset current splits
+        this.currentSplits = [];
+
+        // Update modal info
+        document.getElementById('bulkSplitCount').textContent =
+            `Split ${this.selectedTransactions.size} selected transactions`;
+
+        // Render all template buttons
+        this.renderBulkSplitTemplateButtons();
+
+        // Render splits list
+        this.renderBulkSplitsList();
+
+        // Show modal
+        document.getElementById('bulkSplitModal').classList.remove('hidden');
+    }
+
+    /**
+     * Close bulk split modal
+     */
+    closeBulkSplit() {
+        document.getElementById('bulkSplitModal').classList.add('hidden');
+        this.currentSplits = [];
+    }
+
+    /**
+     * Render template buttons for bulk split
+     */
+    renderBulkSplitTemplateButtons() {
+        const container = document.getElementById('bulkTemplateButtons');
+        container.innerHTML = '';
+
+        // Show all templates
+        this.templateManager.getAllTemplates().forEach(template => {
+            const btn = document.createElement('button');
+            btn.className = 'template-button';
+            btn.textContent = template.name;
+            btn.addEventListener('click', () => this.applyBulkSplitTemplate(template.id));
+            container.appendChild(btn);
+        });
+    }
+
+    /**
+     * Apply a template to bulk split
+     */
+    applyBulkSplitTemplate(templateId) {
+        const template = this.templateManager.getTemplateById(templateId);
+        if (!template) return;
+
+        // Use template splits (just percentages and categories)
+        this.currentSplits = template.splits.map(split => ({
+            categoryId: split.categoryId,
+            percentage: split.percentage,
+            amount: 0 // Will be calculated per transaction
+        }));
+
+        this.renderBulkSplitsList();
+    }
+
+    /**
+     * Render bulk splits list
+     */
+    renderBulkSplitsList() {
+        const container = document.getElementById('bulkSplitsList');
+        container.innerHTML = '';
+
+        this.currentSplits.forEach((split, index) => {
+            const row = this.createBulkSplitRow(split, index);
+            container.appendChild(row);
+        });
+
+        this.updateBulkSplitTotals();
+    }
+
+    /**
+     * Create a bulk split row element
+     */
+    createBulkSplitRow(split, index) {
+        const row = document.createElement('div');
+        row.className = 'split-item';
+        row.dataset.index = index;
+
+        row.innerHTML = `
+            <select class="form-select split-category">
+                <option value="">Select category...</option>
+                ${this.renderCategoryOptions(split.categoryId)}
+            </select>
+            <input type="number" class="split-percentage" value="${split.percentage || 0}" min="0" max="100" step="0.01">
+            <span class="split-amount">% of each</span>
+            <button class="btn btn-danger">Remove</button>
+        `;
+
+        // Category change event
+        row.querySelector('.split-category').addEventListener('change', (e) => {
+            this.currentSplits[index].categoryId = e.target.value ? parseInt(e.target.value) : null;
+        });
+
+        // Percentage change event
+        row.querySelector('.split-percentage').addEventListener('input', (e) => {
+            const percentage = parseFloat(e.target.value) || 0;
+            this.currentSplits[index].percentage = percentage;
+            this.updateBulkSplitTotals();
+        });
+
+        // Remove button event
+        row.querySelector('.btn-danger').addEventListener('click', () => {
+            this.removeBulkSplitRow(index);
+        });
+
+        return row;
+    }
+
+    /**
+     * Add a new bulk split row
+     */
+    addBulkSplitRow() {
+        this.currentSplits.push({
+            categoryId: null,
+            percentage: 0
+        });
+        this.renderBulkSplitsList();
+    }
+
+    /**
+     * Remove a bulk split row
+     */
+    removeBulkSplitRow(index) {
+        this.currentSplits.splice(index, 1);
+        this.renderBulkSplitsList();
+    }
+
+    /**
+     * Update bulk split totals display
+     */
+    updateBulkSplitTotals() {
+        const totalPercentage = this.currentSplits.reduce((sum, split) => sum + (split.percentage || 0), 0);
+
+        document.getElementById('bulkSplitPercentageTotal').textContent = `${totalPercentage.toFixed(1)}%`;
+
+        // Highlight if not 100%
+        const percentageEl = document.getElementById('bulkSplitPercentageTotal');
+        if (Math.abs(totalPercentage - 100) > 0.1) {
+            percentageEl.style.color = 'var(--error)';
+        } else {
+            percentageEl.style.color = 'var(--success)';
+        }
+    }
+
+    /**
+     * Confirm bulk split
+     */
+    async confirmBulkSplit() {
+        // Validate splits
+        if (this.currentSplits.length === 0) {
+            alert('Please add at least one split');
+            return;
+        }
+
+        const totalPercentage = this.currentSplits.reduce((sum, split) => sum + (split.percentage || 0), 0);
+        if (Math.abs(totalPercentage - 100) > 0.1) {
+            alert('Split percentages must add up to 100%');
+            return;
+        }
+
+        // Check all splits have categories
+        const hasInvalidSplit = this.currentSplits.some(split => !split.categoryId);
+        if (hasInvalidSplit) {
+            alert('All splits must have a category selected');
+            return;
+        }
+
+        try {
+            const count = this.selectedTransactions.size;
+
+            // Apply splits to all selected transactions
+            for (const id of this.selectedTransactions) {
+                const transaction = this.transactions.find(t => t.id === id);
+                if (!transaction) continue;
+
+                // Calculate amounts for this specific transaction
+                const totalAmount = Math.abs(transaction.amount);
+                const isNegative = transaction.amount < 0;
+
+                const splits = this.currentSplits.map(split => {
+                    const amount = (totalAmount * split.percentage / 100);
+                    return {
+                        categoryId: split.categoryId,
+                        percentage: split.percentage,
+                        amount: isNegative ? -amount : amount
+                    };
+                });
+
+                // Update transaction with splits
+                transaction.splits = splits;
+                transaction.isSplit = true;
+                transaction.categoryId = null;
+
+                await this.db.updateTransaction(transaction);
+            }
+
+            // Clear selection and refresh
+            this.clearSelection();
+            await this.updateCategoryCounts();
+            this.renderCategories();
+            this.renderTransactions();
+            this.closeBulkSplit();
+
+            alert(`Successfully split ${count} transactions!`);
+        } catch (error) {
+            alert('Error splitting transactions: ' + error.message);
             console.error(error);
         }
     }
