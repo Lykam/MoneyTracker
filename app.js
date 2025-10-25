@@ -22,25 +22,38 @@ class MoneyTrackerApp {
      */
     async init() {
         try {
+            console.log('Starting app initialization...');
+
             // Initialize database
+            console.log('Initializing database...');
             await this.db.init();
+            console.log('Database initialized:', this.db.db);
 
             // Initialize category manager
+            console.log('Initializing category manager...');
             this.categoryManager = new CategoryManager(this.db);
             await this.categoryManager.init();
+            console.log('Category manager initialized');
 
             // Initialize rules engine
+            console.log('Initializing rules engine...');
             this.rulesEngine = new RulesEngine(this.db);
             await this.rulesEngine.init();
+            console.log('Rules engine initialized');
 
             // Initialize template manager
+            console.log('Initializing template manager...');
             this.templateManager = new TemplateManager(this.db, this.categoryManager);
             await this.templateManager.init();
+            console.log('Template manager initialized');
 
             // Load transactions
+            console.log('Loading transactions...');
             await this.loadTransactions();
+            console.log('Transactions loaded');
 
             // Setup UI
+            console.log('Setting up UI...');
             this.setupEventListeners();
             this.renderCategories();
             this.renderTransactions();
@@ -48,7 +61,7 @@ class MoneyTrackerApp {
             console.log('MoneyTracker initialized successfully');
         } catch (error) {
             console.error('Failed to initialize app:', error);
-            alert('Failed to initialize application. Please refresh the page.');
+            alert('Failed to initialize application: ' + error.message + '\nCheck console for details.');
         }
     }
 
@@ -56,11 +69,20 @@ class MoneyTrackerApp {
      * Setup all event listeners
      */
     setupEventListeners() {
+        console.log('Setting up event listeners...');
+
         // Import CSV
-        document.getElementById('importBtn').addEventListener('click', () => this.openImportModal());
+        const importBtn = document.getElementById('importBtn');
+        console.log('Import button found:', importBtn);
+        importBtn.addEventListener('click', () => {
+            console.log('Import button clicked!');
+            this.openImportModal();
+        });
         document.getElementById('csvFileInput').addEventListener('change', (e) => this.handleFileSelect(e));
         document.getElementById('confirmImportBtn').addEventListener('click', () => this.confirmImport());
         document.getElementById('cancelImportBtn').addEventListener('click', () => this.closeImportModal());
+
+        console.log('Import CSV listeners attached');
 
         // Export data
         document.getElementById('exportBtn').addEventListener('click', () => this.exportData());
@@ -1246,14 +1268,19 @@ class MoneyTrackerApp {
 }
 
 // Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM loaded, creating app...');
     const app = new MoneyTrackerApp();
-    app.init();
-
-    // Setup create rule confirmation button
-    document.getElementById('confirmCreateRuleBtn').addEventListener('click', () => app.confirmCreateRule());
-    document.getElementById('cancelCreateRuleBtn').addEventListener('click', () => app.closeCreateRuleModal());
 
     // Make app globally accessible for debugging
     window.app = app;
+
+    // Initialize app
+    await app.init();
+
+    // Setup create rule confirmation button (these need to be set after init)
+    document.getElementById('confirmCreateRuleBtn').addEventListener('click', () => app.confirmCreateRule());
+    document.getElementById('cancelCreateRuleBtn').addEventListener('click', () => app.closeCreateRuleModal());
+
+    console.log('App ready!');
 });

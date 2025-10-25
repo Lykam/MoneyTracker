@@ -5,8 +5,8 @@
 
 class MoneyTrackerDB {
     constructor() {
-        this.dbName = 'MoneyTrackerDB';
-        this.version = 2;
+        this.dbName = 'MoneyTrackerDB_v2';
+        this.version = 1;
         this.db = null;
     }
 
@@ -15,15 +15,22 @@ class MoneyTrackerDB {
      */
     async init() {
         return new Promise((resolve, reject) => {
+            console.log('Opening IndexedDB:', this.dbName, 'version:', this.version);
             const request = indexedDB.open(this.dbName, this.version);
 
-            request.onerror = () => reject(request.error);
+            request.onerror = () => {
+                console.error('IndexedDB open error:', request.error);
+                reject(request.error);
+            };
+
             request.onsuccess = () => {
+                console.log('IndexedDB opened successfully');
                 this.db = request.result;
                 resolve(this.db);
             };
 
             request.onupgradeneeded = (event) => {
+                console.log('IndexedDB upgrade needed, old version:', event.oldVersion, 'new version:', event.newVersion);
                 const db = event.target.result;
 
                 // Create transactions store
@@ -50,10 +57,13 @@ class MoneyTrackerDB {
 
                 // Create templates store (v2)
                 if (!db.objectStoreNames.contains('templates')) {
+                    console.log('Creating templates store...');
                     const templateStore = db.createObjectStore('templates', { keyPath: 'id', autoIncrement: true });
                     templateStore.createIndex('name', 'name', { unique: false });
                     templateStore.createIndex('merchant', 'merchant', { unique: false });
                 }
+
+                console.log('IndexedDB upgrade completed');
             };
         });
     }

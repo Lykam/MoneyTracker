@@ -20,9 +20,70 @@ class TemplateManager {
         if (this.templates.length === 0) {
             await this.createDefaultTemplates();
             this.templates = await this.db.getAllTemplates();
+        } else {
+            // Update existing default templates to match current definitions
+            await this.updateDefaultTemplates();
+            this.templates = await this.db.getAllTemplates();
         }
 
         return this.templates;
+    }
+
+    /**
+     * Update existing default templates to match current definitions
+     */
+    async updateDefaultTemplates() {
+        // Get category IDs by name
+        const getCategoryId = (name, parent) => {
+            const category = this.categoryManager.categories.find(
+                c => c.name === name && c.parent === parent
+            );
+            return category ? category.id : null;
+        };
+
+        const defaultDefinitions = {
+            'Walmart - Typical': {
+                merchant: 'WALMART',
+                splits: [
+                    { categoryId: getCategoryId('Groceries', 'Shared'), percentage: 60 },
+                    { categoryId: getCategoryId('Household Supplies', 'Shared'), percentage: 30 },
+                    { categoryId: getCategoryId('Supplies', 'Pets'), percentage: 10 }
+                ]
+            },
+            'Target - Typical': {
+                merchant: 'TARGET',
+                splits: [
+                    { categoryId: getCategoryId('Groceries', 'Shared'), percentage: 25 },
+                    { categoryId: getCategoryId('Clothing', 'Shared'), percentage: 20 },
+                    { categoryId: getCategoryId('Household Supplies', 'Shared'), percentage: 25 },
+                    { categoryId: getCategoryId('Entertainment', 'Shared'), percentage: 20 },
+                    { categoryId: getCategoryId('Supplies', 'Pets'), percentage: 10 }
+                ]
+            },
+            'Amazon - Typical': {
+                merchant: 'AMAZON',
+                splits: [
+                    { categoryId: getCategoryId('Household Supplies', 'Shared'), percentage: 35 },
+                    { categoryId: getCategoryId('Clothing', 'Shared'), percentage: 25 },
+                    { categoryId: getCategoryId('Entertainment', 'Shared'), percentage: 20 },
+                    { categoryId: getCategoryId('Supplies', 'Pets'), percentage: 20 }
+                ]
+            }
+        };
+
+        // Update each default template if it exists
+        for (const [name, definition] of Object.entries(defaultDefinitions)) {
+            const existingTemplate = this.templates.find(t => t.name === name && t.isDefault);
+            if (existingTemplate) {
+                // Filter out any splits with null categoryIds
+                const validSplits = definition.splits.filter(split => split.categoryId !== null);
+
+                // Update the template
+                existingTemplate.splits = validSplits;
+                existingTemplate.merchant = definition.merchant;
+                await this.db.updateTemplate(existingTemplate);
+            }
+        }
     }
 
     /**
@@ -66,12 +127,10 @@ class TemplateManager {
                 name: 'Amazon - Typical',
                 merchant: 'AMAZON',
                 splits: [
-                    { categoryId: getCategoryId('Household Supplies', 'Shared'), percentage: 25 },
-                    { categoryId: getCategoryId('Clothing', 'Shared'), percentage: 20 },
+                    { categoryId: getCategoryId('Household Supplies', 'Shared'), percentage: 35 },
+                    { categoryId: getCategoryId('Clothing', 'Shared'), percentage: 25 },
                     { categoryId: getCategoryId('Entertainment', 'Shared'), percentage: 20 },
-                    { categoryId: getCategoryId('Supplies', 'Pets'), percentage: 20 },
-                    { categoryId: getCategoryId('Personal Spending', 'His'), percentage: 10 },
-                    { categoryId: getCategoryId('Personal Spending', 'Hers'), percentage: 5 }
+                    { categoryId: getCategoryId('Supplies', 'Pets'), percentage: 20 }
                 ],
                 isDefault: true,
                 createdDate: new Date().toISOString()
