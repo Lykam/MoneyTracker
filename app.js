@@ -8,6 +8,7 @@ class MoneyTrackerApp {
         this.categoryManager = null;
         this.rulesEngine = null;
         this.templateManager = null;
+        this.smartCategorizationEngine = null;
         this.transactions = [];
         this.displayedTransactions = []; // Currently visible transactions
         this.selectedTransactions = new Set();
@@ -47,6 +48,12 @@ class MoneyTrackerApp {
             await this.templateManager.init();
             console.log('Template manager initialized');
 
+            // Initialize smart categorization engine
+            console.log('Initializing smart categorization engine...');
+            this.smartCategorizationEngine = new SmartCategorizationEngine(this.db);
+            await this.smartCategorizationEngine.init();
+            console.log('Smart categorization engine initialized');
+
             // Load transactions
             console.log('Loading transactions...');
             await this.loadTransactions();
@@ -55,8 +62,12 @@ class MoneyTrackerApp {
             // Setup UI
             console.log('Setting up UI...');
             this.setupEventListeners();
+            this.setupSpecialCategoryHandlers();
             this.renderCategories();
             this.renderTransactions();
+
+            // Set initial filter state to "All Transactions"
+            this.updateCategoryHighlight(null);
 
             console.log('MoneyTracker initialized successfully');
         } catch (error) {
@@ -113,6 +124,10 @@ class MoneyTrackerApp {
         // Apply rules
         document.getElementById('applyRulesBtn').addEventListener('click', () => this.applyRules());
 
+        // Review queue
+        document.getElementById('acceptAllReviewBtn').addEventListener('click', () => this.acceptAllReview());
+        document.getElementById('reviewLaterBtn').addEventListener('click', () => this.closeReviewQueueModal());
+
         // Clear selection
         document.getElementById('clearSelectionBtn').addEventListener('click', () => this.clearSelection());
 
@@ -151,6 +166,9 @@ class MoneyTrackerApp {
      */
     async updateCategoryCounts() {
         this.categoryCounts = await this.categoryManager.getCategoryCounts(this.transactions);
+
+        // Add review queue count
+        this.categoryCounts['reviewQueue'] = this.transactions.filter(t => t.pendingReview === true).length;
     }
 
     /**
@@ -174,6 +192,22 @@ class MoneyTrackerApp {
         // Update uncategorized count
         const uncategorizedCount = this.categoryCounts['uncategorized'] || 0;
         document.getElementById('uncategorizedCount').textContent = uncategorizedCount;
+
+        // Update review queue count
+        const reviewQueueCount = this.categoryCounts['reviewQueue'] || 0;
+        document.getElementById('reviewQueueCount').textContent = reviewQueueCount;
+
+        // Update all transactions count
+        document.getElementById('allTransactionsCount').textContent = this.transactions.length;
+    }
+
+    /**
+     * Setup special category click handlers (called once during init)
+     */
+    setupSpecialCategoryHandlers() {
+        document.getElementById('showAllCategory').addEventListener('click', () => this.showAllTransactions());
+        document.getElementById('uncategorizedCategory').addEventListener('click', () => this.filterByCategory('uncategorized'));
+        document.getElementById('reviewQueueCategory').addEventListener('click', () => this.filterByCategory('reviewQueue'));
     }
 
     /**
@@ -182,6 +216,7 @@ class MoneyTrackerApp {
     createCategoryItem(category, count) {
         const item = document.createElement('div');
         item.className = 'category-item';
+        item.dataset.categoryId = category.id;
         item.innerHTML = `
             <span class="category-name">
                 <span class="category-color-dot" style="background-color: ${category.color}"></span>
@@ -236,6 +271,10 @@ class MoneyTrackerApp {
             row.classList.add('selected');
         }
 
+        if (transaction.pendingReview) {
+            row.classList.add('pending-review');
+        }
+
         const category = transaction.categoryId
             ? this.categoryManager.getCategoryById(transaction.categoryId)
             : null;
@@ -246,6 +285,13 @@ class MoneyTrackerApp {
         let categoryDisplay = '';
         if (transaction.isSplit && transaction.splits && transaction.splits.length > 0) {
             categoryDisplay = `<span class="text-muted">Split (${transaction.splits.length} categories)</span>`;
+        } else if (transaction.pendingReview) {
+            // Show category with pending indicator
+            const suggestedCategory = this.categoryManager.getCategoryById(transaction.categoryId);
+            categoryDisplay = `
+                <span class="suggestion-category-name">${suggestedCategory ? suggestedCategory.name : 'Unknown'}</span>
+                <span class="pending-indicator">Pending</span>
+            `;
         } else {
             categoryDisplay = `
                 <select class="form-select category-select" data-transaction-id="${transaction.id}">
@@ -474,18 +520,50 @@ class MoneyTrackerApp {
             const result = await this.db.addTransactions(this.previewTransactions);
 
             await this.loadTransactions();
-            this.renderCategories();
-            this.renderTransactions();
 
             this.closeImportModal();
 
-            alert(`Import complete!\nAdded: ${result.added}\nDuplicates skipped: ${result.duplicates}`);
+            // Smart categorization workflow
+            console.log('Starting smart categorization...');
 
-            // Auto-apply rules if any exist
-            if (this.rulesEngine.getAllRules().length > 0) {
-                const shouldApply = confirm('Apply auto-categorization rules to new transactions?');
-                if (shouldApply) {
-                    await this.applyRules();
+            // Step 1: Mine patterns from existing categorized transactions
+            await this.smartCategorizationEngine.minePatterns(this.transactions);
+
+            // Step 2: Auto-categorize new transactions
+            const newTransactions = this.transactions.slice(0, result.added);
+            const categorizationResult = await this.smartCategorizationEngine.autoCategorize(newTransactions);
+
+            // Step 3: Update transactions with suggestions
+            for (const txn of newTransactions) {
+                if (txn.pendingReview) {
+                    await this.db.updateTransaction(txn);
+                }
+            }
+
+            // Step 4: Refresh UI
+            await this.updateCategoryCounts();
+            this.renderCategories();
+            this.renderTransactions();
+
+            // Step 5: Show import summary
+            let message = `Import complete!\nAdded: ${result.added}\nDuplicates skipped: ${result.duplicates}`;
+            if (categorizationResult.suggested > 0) {
+                message += `\n\nSmart categorization:\n${categorizationResult.suggested} transactions auto-categorized`;
+            }
+            alert(message);
+
+            // Step 6: Show review queue if there are pending reviews
+            if (categorizationResult.suggested > 0) {
+                setTimeout(() => {
+                    this.openReviewQueueModal();
+                }, 500);
+            } else {
+                // Fallback to old rules system if no smart suggestions
+                if (this.rulesEngine.getAllRules().length > 0) {
+                    const shouldApply = confirm('Apply auto-categorization rules to new transactions?');
+                    if (shouldApply) {
+                        await this.applyRules();
+                    }
                 }
             }
         } catch (error) {
@@ -637,8 +715,52 @@ class MoneyTrackerApp {
      * Filter transactions by category
      */
     filterByCategory(categoryId) {
-        const filtered = this.transactions.filter(t => t.categoryId === categoryId);
+        let filtered;
+        if (categoryId === 'uncategorized') {
+            // Show transactions with no category
+            filtered = this.transactions.filter(t => !t.categoryId && !t.isSplit);
+        } else if (categoryId === 'reviewQueue') {
+            // Show transactions pending review
+            filtered = this.transactions.filter(t => t.pendingReview === true);
+        } else {
+            // Show transactions with the specific category
+            filtered = this.transactions.filter(t => t.categoryId === categoryId);
+        }
         this.renderTransactions(filtered);
+        this.updateCategoryHighlight(categoryId);
+    }
+
+    /**
+     * Show all transactions (clear filter)
+     */
+    showAllTransactions() {
+        this.renderTransactions();
+        this.updateCategoryHighlight(null);
+    }
+
+    /**
+     * Update visual highlight for active category filter
+     */
+    updateCategoryHighlight(categoryId) {
+        // Remove all existing highlights from sidebar categories
+        document.querySelectorAll('.sidebar .category-item').forEach(item => {
+            item.classList.remove('active');
+        });
+
+        // Add highlight to the active filter
+        if (categoryId === null) {
+            document.getElementById('showAllCategory').classList.add('active');
+        } else if (categoryId === 'uncategorized') {
+            document.getElementById('uncategorizedCategory').classList.add('active');
+        } else if (categoryId === 'reviewQueue') {
+            document.getElementById('reviewQueueCategory').classList.add('active');
+        } else {
+            // Find and highlight the specific category by data attribute
+            const categoryItem = document.querySelector(`.sidebar .category-item[data-category-id="${categoryId}"]`);
+            if (categoryItem) {
+                categoryItem.classList.add('active');
+            }
+        }
     }
 
     /**
@@ -647,6 +769,7 @@ class MoneyTrackerApp {
     searchTransactions(query) {
         if (!query.trim()) {
             this.renderTransactions();
+            this.updateCategoryHighlight(null);
             return;
         }
 
@@ -657,6 +780,10 @@ class MoneyTrackerApp {
         );
 
         this.renderTransactions(filtered);
+        // Clear category highlights when searching
+        document.querySelectorAll('.sidebar .category-item').forEach(item => {
+            item.classList.remove('active');
+        });
     }
 
     /**
@@ -1254,6 +1381,176 @@ class MoneyTrackerApp {
         } catch (error) {
             alert('Error splitting transactions: ' + error.message);
             console.error(error);
+        }
+    }
+
+    /**
+     * Open review queue modal
+     */
+    openReviewQueueModal() {
+        const pendingTransactions = this.transactions.filter(t => t.pendingReview === true);
+
+        if (pendingTransactions.length === 0) {
+            alert('No transactions pending review');
+            return;
+        }
+
+        document.getElementById('reviewQueueInfo').textContent =
+            `${pendingTransactions.length} transaction${pendingTransactions.length > 1 ? 's' : ''} auto-categorized`;
+
+        this.renderReviewQueueList(pendingTransactions);
+
+        document.getElementById('reviewQueueModal').classList.remove('hidden');
+    }
+
+    /**
+     * Close review queue modal
+     */
+    closeReviewQueueModal() {
+        document.getElementById('reviewQueueModal').classList.add('hidden');
+    }
+
+    /**
+     * Render review queue list
+     */
+    renderReviewQueueList(transactions) {
+        const container = document.getElementById('reviewQueueList');
+        container.innerHTML = '';
+
+        transactions.forEach(transaction => {
+            const item = this.createReviewQueueItem(transaction);
+            container.appendChild(item);
+        });
+    }
+
+    /**
+     * Create a review queue item element
+     */
+    createReviewQueueItem(transaction) {
+        const item = document.createElement('div');
+        item.className = 'review-queue-item';
+        item.dataset.transactionId = transaction.id;
+
+        const category = this.categoryManager.getCategoryById(transaction.categoryId);
+        const confidence = transaction.suggestionConfidence || 0;
+
+        // Determine confidence level for styling
+        let confidenceClass = 'low';
+        if (confidence >= 85) {
+            confidenceClass = 'high';
+        } else if (confidence >= 70) {
+            confidenceClass = 'medium';
+        }
+
+        const amountClass = transaction.amount < 0 ? 'amount-debit' : 'amount-credit';
+
+        item.innerHTML = `
+            <div class="review-item-header">
+                <div class="review-item-info">
+                    <div class="review-item-date">${CSVParser.formatDate(transaction.date)}</div>
+                    <div class="review-item-description">${transaction.description}</div>
+                    ${transaction.memo ? `<div class="text-muted" style="font-size: 0.85rem;">${transaction.memo}</div>` : ''}
+                    <div class="review-item-amount ${amountClass}">${CSVParser.formatAmount(transaction.amount)}</div>
+                </div>
+            </div>
+            <div class="review-item-suggestion">
+                <div class="suggestion-category">
+                    <span class="category-color-dot" style="background-color: ${category ? category.color : '#666'}"></span>
+                    <span class="suggestion-category-name">${category ? category.name : 'Unknown'}</span>
+                    <span class="confidence-badge ${confidenceClass}">${confidence.toFixed(0)}% confident</span>
+                </div>
+                <div class="suggestion-reasoning">${transaction.suggestionReasoning || 'No reasoning provided'}</div>
+            </div>
+            <div class="review-item-actions">
+                <button class="btn btn-primary accept-btn">Accept</button>
+                <button class="btn btn-secondary deny-btn">Deny</button>
+            </div>
+        `;
+
+        // Accept button
+        item.querySelector('.accept-btn').addEventListener('click', async () => {
+            await this.acceptReviewSuggestion(transaction);
+            item.remove();
+            await this.checkReviewQueueEmpty();
+        });
+
+        // Deny button
+        item.querySelector('.deny-btn').addEventListener('click', async () => {
+            await this.denyReviewSuggestion(transaction);
+            item.remove();
+            await this.checkReviewQueueEmpty();
+        });
+
+        return item;
+    }
+
+    /**
+     * Accept a review suggestion
+     */
+    async acceptReviewSuggestion(transaction) {
+        await this.smartCategorizationEngine.acceptSuggestion(transaction);
+
+        // Reload transaction from database
+        await this.loadTransactions();
+        await this.updateCategoryCounts();
+        this.renderCategories();
+        this.renderTransactions();
+    }
+
+    /**
+     * Deny a review suggestion
+     */
+    async denyReviewSuggestion(transaction) {
+        await this.smartCategorizationEngine.denySuggestion(transaction);
+
+        // Reload transaction from database
+        await this.loadTransactions();
+        await this.updateCategoryCounts();
+        this.renderCategories();
+        this.renderTransactions();
+    }
+
+    /**
+     * Accept all pending review suggestions
+     */
+    async acceptAllReview() {
+        const pendingTransactions = this.transactions.filter(t => t.pendingReview === true);
+
+        if (pendingTransactions.length === 0) {
+            this.closeReviewQueueModal();
+            return;
+        }
+
+        const confirm = window.confirm(`Accept all ${pendingTransactions.length} suggestions?`);
+        if (!confirm) return;
+
+        for (const transaction of pendingTransactions) {
+            await this.smartCategorizationEngine.acceptSuggestion(transaction);
+        }
+
+        await this.loadTransactions();
+        await this.updateCategoryCounts();
+        this.renderCategories();
+        this.renderTransactions();
+
+        this.closeReviewQueueModal();
+
+        alert(`Accepted ${pendingTransactions.length} suggestions`);
+    }
+
+    /**
+     * Check if review queue is empty and close modal if so
+     */
+    async checkReviewQueueEmpty() {
+        const remaining = document.querySelectorAll('.review-queue-item').length;
+
+        if (remaining === 0) {
+            this.closeReviewQueueModal();
+            alert('All suggestions reviewed!');
+        } else {
+            // Update the info text
+            document.getElementById('reviewQueueInfo').textContent =
+                `${remaining} transaction${remaining > 1 ? 's' : ''} remaining`;
         }
     }
 

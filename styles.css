@@ -117,6 +117,12 @@ body {
     background-color: var(--bg-tertiary);
 }
 
+.category-item.active {
+    background-color: rgba(74, 158, 255, 0.2);
+    border-left: 3px solid var(--accent-primary);
+    padding-left: calc(0.5rem - 3px);
+}
+
 .category-name {
     font-size: 0.9rem;
 }
@@ -810,4 +816,146 @@ body {
 
 .stat-value.positive {
     color: var(--success);
+}
+
+/* Review Queue Styles */
+.badge {
+    background-color: var(--warning) !important;
+    color: var(--bg-primary) !important;
+    font-weight: 600;
+}
+
+.review-queue-info {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: var(--bg-tertiary);
+    border-radius: 4px;
+    border-left: 3px solid var(--warning);
+}
+
+.review-queue-info p:first-child {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.review-queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-height: 500px;
+    overflow-y: auto;
+    margin-bottom: 1.5rem;
+}
+
+.review-queue-item {
+    padding: 1rem;
+    background-color: var(--bg-tertiary);
+    border-radius: 4px;
+    border-left: 3px solid var(--warning);
+}
+
+.review-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.review-item-info {
+    flex: 1;
+}
+
+.review-item-date {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.review-item-description {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.review-item-amount {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.review-item-suggestion {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background-color: var(--bg-secondary);
+    border-radius: 4px;
+    margin-bottom: 0.75rem;
+}
+
+.suggestion-category {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.suggestion-category-name {
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.confidence-badge {
+    padding: 0.125rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background-color: var(--success);
+    color: white;
+}
+
+.confidence-badge.high {
+    background-color: var(--success);
+}
+
+.confidence-badge.medium {
+    background-color: var(--warning);
+}
+
+.confidence-badge.low {
+    background-color: var(--error);
+}
+
+.suggestion-reasoning {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.review-item-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.review-item-actions .btn {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+/* Pending review transaction indicator */
+.transaction-table tbody tr.pending-review {
+    border-left: 3px solid var(--warning);
+    background-color: rgba(255, 152, 0, 0.05);
+}
+
+.transaction-table tbody tr.pending-review td:first-child {
+    padding-left: calc(1rem - 3px);
+}
+
+.pending-indicator {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: var(--warning);
+    color: var(--bg-primary);
+    margin-left: 0.5rem;
 }

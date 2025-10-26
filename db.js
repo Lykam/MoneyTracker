@@ -6,7 +6,7 @@
 class MoneyTrackerDB {
     constructor() {
         this.dbName = 'MoneyTrackerDB_v2';
-        this.version = 1;
+        this.version = 2;
         this.db = null;
     }
 
@@ -61,6 +61,14 @@ class MoneyTrackerDB {
                     const templateStore = db.createObjectStore('templates', { keyPath: 'id', autoIncrement: true });
                     templateStore.createIndex('name', 'name', { unique: false });
                     templateStore.createIndex('merchant', 'merchant', { unique: false });
+                }
+
+                // Create smart_patterns store (for smart categorization)
+                if (!db.objectStoreNames.contains('smart_patterns')) {
+                    console.log('Creating smart_patterns store...');
+                    const patternStore = db.createObjectStore('smart_patterns', { keyPath: 'id', autoIncrement: true });
+                    patternStore.createIndex('merchantName', 'merchantName', { unique: false });
+                    patternStore.createIndex('categoryId', 'categoryId', { unique: false });
                 }
 
                 console.log('IndexedDB upgrade completed');
@@ -349,6 +357,62 @@ class MoneyTrackerDB {
     }
 
     /**
+     * Add a smart pattern
+     */
+    async addPattern(pattern) {
+        const tx = this.db.transaction(['smart_patterns'], 'readwrite');
+        const store = tx.objectStore('smart_patterns');
+
+        return new Promise((resolve, reject) => {
+            const request = store.add(pattern);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Get all smart patterns
+     */
+    async getPatterns() {
+        const tx = this.db.transaction(['smart_patterns'], 'readonly');
+        const store = tx.objectStore('smart_patterns');
+
+        return new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Update a smart pattern
+     */
+    async updatePattern(pattern) {
+        const tx = this.db.transaction(['smart_patterns'], 'readwrite');
+        const store = tx.objectStore('smart_patterns');
+
+        return new Promise((resolve, reject) => {
+            const request = store.put(pattern);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
+     * Delete a smart pattern
+     */
+    async deletePattern(id) {
+        const tx = this.db.transaction(['smart_patterns'], 'readwrite');
+        const store = tx.objectStore('smart_patterns');
+
+        return new Promise((resolve, reject) => {
+            const request = store.delete(id);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    /**
      * Export all data
      */
     async exportData() {
@@ -356,15 +420,17 @@ class MoneyTrackerDB {
         const categories = await this.getAllCategories();
         const rules = await this.getAllRules();
         const templates = await this.getAllTemplates();
+        const smartPatterns = await this.getPatterns();
 
         return {
-            version: '2.0.0',
+            version: '2.1.0',
             exportDate: new Date().toISOString(),
             data: {
                 transactions,
                 categories,
                 rules,
-                templates
+                templates,
+                smartPatterns
             }
         };
     }
@@ -398,11 +464,19 @@ class MoneyTrackerDB {
             }
         }
 
+        // Import smart patterns (if they exist)
+        if (exportData.data.smartPatterns) {
+            for (const pattern of exportData.data.smartPatterns) {
+                await this.addPattern(pattern);
+            }
+        }
+
         return {
             transactions: exportData.data.transactions.length,
             categories: exportData.data.categories.length,
             rules: exportData.data.rules.length,
-            templates: exportData.data.templates ? exportData.data.templates.length : 0
+            templates: exportData.data.templates ? exportData.data.templates.length : 0,
+            smartPatterns: exportData.data.smartPatterns ? exportData.data.smartPatterns.length : 0
         };
     }
 
@@ -410,7 +484,7 @@ class MoneyTrackerDB {
      * Clear all data from all stores
      */
     async clearAllData() {
-        const tx = this.db.transaction(['transactions', 'categories', 'rules', 'templates'], 'readwrite');
+        const tx = this.db.transaction(['transactions', 'categories', 'rules', 'templates', 'smart_patterns'], 'readwrite');
 
         await Promise.all([
             new Promise((resolve, reject) => {
@@ -430,6 +504,11 @@ class MoneyTrackerDB {
             }),
             new Promise((resolve, reject) => {
                 const request = tx.objectStore('templates').clear();
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            }),
+            new Promise((resolve, reject) => {
+                const request = tx.objectStore('smart_patterns').clear();
                 request.onsuccess = () => resolve();
                 request.onerror = () => reject(request.error);
             })

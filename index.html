@@ -27,6 +27,32 @@
                     <h2>Categories</h2>
                     <div id="categoryList" class="category-list">
                         <div class="category-group">
+                            <div class="category-items">
+                                <div class="category-item" id="showAllCategory">
+                                    <span class="category-name" style="font-weight: bold;">All Transactions</span>
+                                    <span class="category-count" id="allTransactionsCount">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="category-group">
+                            <h3>Uncategorized</h3>
+                            <div class="category-items" data-group="Uncategorized">
+                                <div class="category-item" id="uncategorizedCategory">
+                                    <span class="category-name">No Category</span>
+                                    <span class="category-count" id="uncategorizedCount">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="category-group">
+                            <h3>Review Queue</h3>
+                            <div class="category-items" data-group="ReviewQueue">
+                                <div class="category-item" id="reviewQueueCategory">
+                                    <span class="category-name">Pending Review</span>
+                                    <span class="category-count badge" id="reviewQueueCount">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="category-group">
                             <h3>His</h3>
                             <div class="category-items" data-group="His"></div>
                         </div>
@@ -45,15 +71,6 @@
                         <div class="category-group">
                             <h3>Transfers</h3>
                             <div class="category-items" data-group="Transfers"></div>
-                        </div>
-                        <div class="category-group">
-                            <h3>Uncategorized</h3>
-                            <div class="category-items" data-group="Uncategorized">
-                                <div class="category-item">
-                                    <span class="category-name">No Category</span>
-                                    <span class="category-count" id="uncategorizedCount">0</span>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -312,6 +329,31 @@
         </div>
     </div>
 
+    <!-- Review Queue Modal -->
+    <div id="reviewQueueModal" class="modal hidden">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>Review Auto-Categorized Transactions</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="review-queue-info">
+                    <p id="reviewQueueInfo"></p>
+                    <p class="text-muted">These transactions were automatically categorized. Please review and approve or deny each suggestion.</p>
+                </div>
+
+                <div class="review-queue-list" id="reviewQueueList">
+                    <!-- Review items will be inserted here -->
+                </div>
+
+                <div class="modal-actions">
+                    <button id="acceptAllReviewBtn" class="btn btn-primary">Accept All</button>
+                    <button id="reviewLaterBtn" class="btn btn-secondary">Review Later</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Hidden file input for import -->
     <input type="file" id="importDataFileInput" accept=".json" style="display: none;">
 
@@ -321,6 +363,7 @@
     <script src="categories.js"></script>
     <script src="rules.js"></script>
     <script src="templates.js"></script>
+    <script src="smart-categorization.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
